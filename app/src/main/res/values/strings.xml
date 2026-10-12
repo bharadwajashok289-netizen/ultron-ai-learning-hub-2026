@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Ultron</string>
+    <string name="app_tagline">Study smarter. Go further.</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_study">Study</string>
+    <string name="nav_focus">Focus</string>
+    <string name="nav_tasks">Tasks</string>
+    <string name="nav_achievements">Awards</string>
+    <string name="nav_subscription">Plans</string>
+    <string name="nav_profile">Profile</string>
+    <string name="nav_collab">Collab</string>
+    <string name="nav_admin">Admin</string>
+    <string name="status_online">Cloud Synced</string>
+    <string name="status_offline">Offline Mode</string>
+</resources>

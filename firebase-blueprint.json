@@ -1,0 +1,270 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Student, teacher, principal, or admin profile with academic details, subscription state, usage counters, XP, streaks, and badges.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "fullName": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "description": "Email address" },
+        "studentClass": { "type": "string", "description": "Class or grade" },
+        "section": { "type": "string", "description": "Section identifier" },
+        "schoolName": { "type": "string", "description": "School or institution name" },
+        "dob": { "type": "string", "description": "Date of birth" },
+        "age": { "type": "integer", "description": "Age in years" },
+        "role": { "type": "string", "enum": ["STUDENT", "TEACHER", "PRINCIPAL", "ADMIN"] },
+        "language": { "type": "string", "description": "Selected study language" },
+        "themePreference": { "type": "string", "enum": ["DARK", "LIGHT", "SYSTEM"] },
+        "plan": { "type": "string", "enum": ["FREE", "BASIC", "PRO"] },
+        "subscriptionStatus": { "type": "string", "enum": ["ACTIVE", "EXPIRED"] },
+        "subscriptionStartDate": { "type": "string", "description": "ISO date of subscription start" },
+        "subscriptionExpiryDate": { "type": "string", "description": "ISO date of subscription expiry" },
+        "chatsUsed": { "type": "integer", "description": "Monthly Gemini study chats used" },
+        "imagesUsed": { "type": "integer", "description": "Monthly image/OCR uploads used" },
+        "usageMonth": { "type": "string", "description": "YYYY-MM bucket for monthly usage reset" },
+        "xp": { "type": "integer", "description": "Total experience points" },
+        "level": { "type": "integer", "description": "Current student level" },
+        "currentStreak": { "type": "integer", "description": "Current daily study streak" },
+        "longestStreak": { "type": "integer", "description": "Longest daily study streak" },
+        "lastStudyDate": { "type": "string", "description": "Local YYYY-MM-DD of last study activity" },
+        "unlockedBadges": { "type": "array", "description": "List of unlocked badge IDs" },
+        "questionsAnswered": { "type": "integer" },
+        "quizzesCompleted": { "type": "integer" },
+        "flashcardsReviewed": { "type": "integer" },
+        "flashcardsMastered": { "type": "integer" },
+        "homeworkSessions": { "type": "integer" },
+        "focusSessions": { "type": "integer" },
+        "studyMinutes": { "type": "integer" },
+        "tasksCompleted": { "type": "integer" },
+        "totalStudySessions": { "type": "integer" },
+        "syllabusTopicsCompleted": { "type": "integer" },
+        "onboardingCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": [
+        "userId", "fullName", "email", "studentClass", "section", "schoolName",
+        "dob", "age", "role", "language", "themePreference", "plan",
+        "subscriptionStatus", "chatsUsed", "imagesUsed", "usageMonth",
+        "xp", "level", "currentStreak", "longestStreak", "onboardingCompleted",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "StudyTask": {
+      "title": "StudyTask",
+      "description": "Student study task or deadline item.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "deadline": { "type": "string" },
+        "priority": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "category": { "type": "string", "enum": ["TODAY", "TOMORROW", "UPCOMING"] },
+        "completed": { "type": "boolean" },
+        "xpAwarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "subject", "deadline", "priority", "category", "completed", "xpAwarded", "createdAt", "updatedAt"]
+    },
+    "StudyConversation": {
+      "title": "StudyConversation",
+      "description": "Saved Gemini study chat conversation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "language": { "type": "string" },
+        "lastMessagePreview": { "type": "string" },
+        "messageCount": { "type": "integer" },
+        "messagesPayload": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "language", "lastMessagePreview", "messageCount", "messagesPayload", "createdAt", "updatedAt"]
+    },
+    "FlashcardDeck": {
+      "title": "FlashcardDeck",
+      "description": "Flashcard deck created manually or from OCR study images.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "subject": { "type": "string" },
+        "totalCards": { "type": "integer" },
+        "masteredCards": { "type": "integer" },
+        "cardsPayload": { "type": "string" },
+        "xpAwarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "subject", "totalCards", "masteredCards", "cardsPayload", "xpAwarded", "createdAt", "updatedAt"]
+    },
+    "StudyQuiz": {
+      "title": "StudyQuiz",
+      "description": "Generated MCQ quiz and results.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["Easy", "Medium", "Hard"] },
+        "totalQuestions": { "type": "integer" },
+        "correctAnswers": { "type": "integer" },
+        "scorePercent": { "type": "integer" },
+        "questionsPayload": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "xpAwarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "topic", "difficulty", "totalQuestions", "correctAnswers", "scorePercent", "questionsPayload", "completed", "xpAwarded", "createdAt", "updatedAt"]
+    },
+    "FocusSessionRecord": {
+      "title": "FocusSessionRecord",
+      "description": "Focus Mode syllabus item and Pomodoro session record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "topic": { "type": "string" },
+        "syllabusSummary": { "type": "string" },
+        "revisionNotes": { "type": "string" },
+        "practiceQuestions": { "type": "string" },
+        "durationMinutes": { "type": "integer" },
+        "completed": { "type": "boolean" },
+        "xpAwarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "subject", "topic", "syllabusSummary", "revisionNotes", "practiceQuestions", "durationMinutes", "completed", "xpAwarded", "createdAt", "updatedAt"]
+    },
+    "HomeworkSession": {
+      "title": "HomeworkSession",
+      "description": "Homework Assist OCR question and step-by-step concept explanation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "extractedQuestion": { "type": "string" },
+        "stepByStepSolution": { "type": "string" },
+        "conceptExplanation": { "type": "string" },
+        "followUpNotes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "subject", "extractedQuestion", "stepByStepSolution", "conceptExplanation", "followUpNotes", "createdAt", "updatedAt"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "Manual UPI payment verification request.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "selectedPlan": { "type": "string", "enum": ["BASIC", "PRO"] },
+        "amount": { "type": "integer" },
+        "utr": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "processedByAdmin": { "type": "string" },
+        "adminNote": { "type": "string" },
+        "notificationStatus": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "studentName", "studentEmail", "selectedPlan", "amount", "utr", "status", "processedByAdmin", "adminNote", "notificationStatus", "createdAt", "updatedAt"]
+    },
+    "SharedNotebook": {
+      "title": "SharedNotebook",
+      "description": "Collaborative student notebook created from web/video/study sessions with peer review and workspace chat.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "sourceUrl": { "type": "string" },
+        "content": { "type": "string" },
+        "isPublic": { "type": "boolean" },
+        "likesCount": { "type": "integer" },
+        "feedbackLog": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorName", "title", "subject", "sourceType", "sourceUrl", "content", "isPublic", "likesCount", "feedbackLog", "createdAt", "updatedAt"]
+    },
+    "SchoolPortal": {
+      "title": "SchoolPortal",
+      "description": "School portal and collaborative group workspace created by Admins, Teachers, or Principals.",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "creatorRole": { "type": "string", "enum": ["ADMIN", "TEACHER", "PRINCIPAL", "STUDENT"] },
+        "schoolName": { "type": "string" },
+        "groupName": { "type": "string" },
+        "description": { "type": "string" },
+        "announcement": { "type": "string" },
+        "sharedFilesInfo": { "type": "string" },
+        "chatTranscript": { "type": "string" },
+        "voiceRoomActive": { "type": "boolean" },
+        "portalStatus": { "type": "string", "enum": ["ACTIVE", "APPROVED", "PENDING_APPROVAL", "REJECTED", "SUSPENDED", "REVOKED"] },
+        "academicYear": { "type": "string" },
+        "classesInfo": { "type": "string" },
+        "subjectsInfo": { "type": "string" },
+        "timetableInfo": { "type": "string" },
+        "homeworkInfo": { "type": "string" },
+        "groupCategory": { "type": "string", "enum": ["OFFICIAL_PORTAL", "CLASS_GROUP", "SUBJECT_GROUP", "STUDENT_STUDY_GROUP", "EXAM_PREP_GROUP"] },
+        "moderationLog": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["creatorId", "creatorName", "creatorRole", "schoolName", "groupName", "description", "announcement", "sharedFilesInfo", "chatTranscript", "voiceRoomActive", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles and study progression stats."
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": "StudyTask",
+      "description": "Student tasks and deadlines."
+    },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": "StudyConversation",
+      "description": "Saved Gemini study chat conversations."
+    },
+    "/users/{userId}/flashcard_decks/{deckId}": {
+      "schema": "FlashcardDeck",
+      "description": "Student flashcard decks."
+    },
+    "/users/{userId}/quizzes/{quizId}": {
+      "schema": "StudyQuiz",
+      "description": "Student generated quizzes and results."
+    },
+    "/users/{userId}/focus_sessions/{sessionId}": {
+      "schema": "FocusSessionRecord",
+      "description": "Student Focus Mode syllabus topics and timer sessions."
+    },
+    "/users/{userId}/homework_sessions/{hwId}": {
+      "schema": "HomeworkSession",
+      "description": "Student Homework Assist sessions."
+    },
+    "/payment_requests/{requestId}": {
+      "schema": "PaymentRequest",
+      "description": "Manual UPI payment requests awaiting admin verification."
+    },
+    "/notebooks/{notebookId}": {
+      "schema": "SharedNotebook",
+      "description": "Shared collaborative student notebooks and peer workspace."
+    },
+    "/school_portals/{portalId}": {
+      "schema": "SchoolPortal",
+      "description": "School portals and group chat rooms managed by educators/admins."
+    }
+  }
+}

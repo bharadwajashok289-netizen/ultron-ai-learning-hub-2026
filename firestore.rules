@@ -1,0 +1,497 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Pillar 0: Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        ('email_verified' in request.auth.token &&
+         request.auth.token.email_verified == true &&
+         'email' in request.auth.token && (
+          request.auth.token.email == 'manaskakkunuri55@gmail.com' ||
+          request.auth.token.email == 'bharadwajashok289@gmail.com' ||
+          request.auth.token.email == 'cannies.studio@gmail.com'
+        )) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 1. UserProfile Validation
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+             data.studentClass is string && data.studentClass.size() <= 40 &&
+             data.section is string && data.section.size() <= 20 &&
+             data.schoolName is string && data.schoolName.size() <= 160 &&
+             data.dob is string && data.dob.size() <= 30 &&
+             data.age is int && data.age >= 0 && data.age <= 120 &&
+             data.role in ['STUDENT', 'TEACHER', 'PRINCIPAL', 'ADMIN'] &&
+             data.language is string && data.language.size() >= 2 && data.language.size() <= 40 &&
+             data.themePreference in ['DARK', 'LIGHT', 'SYSTEM'] &&
+             data.plan in ['FREE', 'BASIC', 'PRO'] &&
+             data.subscriptionStatus in ['ACTIVE', 'EXPIRED'] &&
+             (!('subscriptionStartDate' in data) || (data.subscriptionStartDate is string && data.subscriptionStartDate.size() <= 40)) &&
+             (!('subscriptionExpiryDate' in data) || (data.subscriptionExpiryDate is string && data.subscriptionExpiryDate.size() <= 40)) &&
+             data.chatsUsed is int && data.chatsUsed >= 0 &&
+             data.imagesUsed is int && data.imagesUsed >= 0 &&
+             data.usageMonth is string && data.usageMonth.size() <= 16 &&
+             data.xp is int && data.xp >= 0 &&
+             data.level is int && data.level >= 1 &&
+             data.currentStreak is int && data.currentStreak >= 0 &&
+             data.longestStreak is int && data.longestStreak >= 0 &&
+             (!('lastStudyDate' in data) || (data.lastStudyDate is string && data.lastStudyDate.size() <= 20)) &&
+             (!('unlockedBadges' in data) || (data.unlockedBadges is list && data.unlockedBadges.size() <= 30)) &&
+             (!('questionsAnswered' in data) || (data.questionsAnswered is int && data.questionsAnswered >= 0)) &&
+             (!('quizzesCompleted' in data) || (data.quizzesCompleted is int && data.quizzesCompleted >= 0)) &&
+             (!('flashcardsReviewed' in data) || (data.flashcardsReviewed is int && data.flashcardsReviewed >= 0)) &&
+             (!('flashcardsMastered' in data) || (data.flashcardsMastered is int && data.flashcardsMastered >= 0)) &&
+             (!('homeworkSessions' in data) || (data.homeworkSessions is int && data.homeworkSessions >= 0)) &&
+             (!('focusSessions' in data) || (data.focusSessions is int && data.focusSessions >= 0)) &&
+             (!('studyMinutes' in data) || (data.studyMinutes is int && data.studyMinutes >= 0)) &&
+             (!('tasksCompleted' in data) || (data.tasksCompleted is int && data.tasksCompleted >= 0)) &&
+             (!('totalStudySessions' in data) || (data.totalStudySessions is int && data.totalStudySessions >= 0)) &&
+             (!('syllabusTopicsCompleted' in data) || (data.syllabusTopicsCompleted is int && data.syllabusTopicsCompleted >= 0)) &&
+             data.onboardingCompleted is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'fullName', 'email', 'studentClass', 'section', 'schoolName',
+                         'dob', 'age', 'role', 'language', 'themePreference', 'plan',
+                         'subscriptionStatus', 'chatsUsed', 'imagesUsed', 'usageMonth',
+                         'xp', 'level', 'currentStreak', 'longestStreak', 'onboardingCompleted',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'fullName', 'email', 'studentClass', 'section', 'schoolName',
+                         'dob', 'age', 'role', 'language', 'themePreference', 'plan',
+                         'subscriptionStatus', 'subscriptionStartDate', 'subscriptionExpiryDate',
+                         'chatsUsed', 'imagesUsed', 'usageMonth', 'xp', 'level',
+                         'currentStreak', 'longestStreak', 'lastStudyDate', 'unlockedBadges',
+                         'questionsAnswered', 'quizzesCompleted', 'flashcardsReviewed',
+                         'flashcardsMastered', 'homeworkSessions', 'focusSessions', 'studyMinutes',
+                         'tasksCompleted', 'totalStudySessions', 'syllabusTopicsCompleted',
+                         'onboardingCompleted', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming()) &&
+                       (isAdmin() || (incoming().plan == 'FREE' && incoming().role in ['STUDENT', 'TEACHER', 'PRINCIPAL']));
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() || (
+                           request.auth.uid == userId &&
+                           incoming().plan == existing().plan &&
+                           incoming().subscriptionStatus == existing().subscriptionStatus &&
+                           (incoming().role == existing().role || incoming().role in ['STUDENT', 'TEACHER', 'PRINCIPAL']) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'fullName', 'email', 'studentClass', 'section', 'schoolName',
+                             'dob', 'age', 'role', 'language', 'themePreference',
+                             'chatsUsed', 'imagesUsed', 'usageMonth', 'xp', 'level',
+                             'currentStreak', 'longestStreak', 'lastStudyDate', 'unlockedBadges',
+                             'questionsAnswered', 'quizzesCompleted', 'flashcardsReviewed',
+                             'flashcardsMastered', 'homeworkSessions', 'focusSessions', 'studyMinutes',
+                             'tasksCompleted', 'totalStudySessions', 'syllabusTopicsCompleted',
+                             'onboardingCompleted', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if isAdmin();
+
+      // 2. StudyTask Subcollection
+      function isValidStudyTask(data) {
+        return data.userId is string && data.userId == userId &&
+               data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+               data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 80 &&
+               data.deadline is string && data.deadline.size() <= 40 &&
+               data.priority in ['HIGH', 'MEDIUM', 'LOW'] &&
+               data.category in ['TODAY', 'TOMORROW', 'UPCOMING'] &&
+               data.completed is bool &&
+               data.xpAwarded is bool &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /tasks/{taskId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(taskId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(taskId) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['userId', 'title', 'subject', 'deadline', 'priority', 'category', 'completed', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'subject', 'deadline', 'priority', 'category', 'completed', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         isValidStudyTask(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(taskId) &&
+                         isValidStudyTask(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subject', 'deadline', 'priority', 'category', 'completed', 'xpAwarded', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(taskId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      // 3. StudyConversation Subcollection
+      function isValidConversation(data) {
+        return data.userId is string && data.userId == userId &&
+               data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+               data.language is string && data.language.size() >= 2 && data.language.size() <= 40 &&
+               data.lastMessagePreview is string && data.lastMessagePreview.size() <= 500 &&
+               data.messageCount is int && data.messageCount >= 0 &&
+               data.messagesPayload is string && data.messagesPayload.size() <= 100000 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /conversations/{conversationId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(conversationId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(conversationId) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['userId', 'title', 'language', 'lastMessagePreview', 'messageCount', 'messagesPayload', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'language', 'lastMessagePreview', 'messageCount', 'messagesPayload', 'createdAt', 'updatedAt']) &&
+                         isValidConversation(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(conversationId) &&
+                         isValidConversation(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'language', 'lastMessagePreview', 'messageCount', 'messagesPayload', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(conversationId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      // 4. FlashcardDeck Subcollection
+      function isValidFlashcardDeck(data) {
+        return data.userId is string && data.userId == userId &&
+               data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+               data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 80 &&
+               data.totalCards is int && data.totalCards >= 1 && data.totalCards <= 200 &&
+               data.masteredCards is int && data.masteredCards >= 0 && data.masteredCards <= data.totalCards &&
+               data.cardsPayload is string && data.cardsPayload.size() <= 80000 &&
+               data.xpAwarded is bool &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /flashcard_decks/{deckId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(deckId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(deckId) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['userId', 'name', 'subject', 'totalCards', 'masteredCards', 'cardsPayload', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'subject', 'totalCards', 'masteredCards', 'cardsPayload', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         isValidFlashcardDeck(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(deckId) &&
+                         isValidFlashcardDeck(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'subject', 'totalCards', 'masteredCards', 'cardsPayload', 'xpAwarded', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(deckId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      // 5. StudyQuiz Subcollection
+      function isValidStudyQuiz(data) {
+        return data.userId is string && data.userId == userId &&
+               data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 200 &&
+               data.difficulty in ['Easy', 'Medium', 'Hard'] &&
+               data.totalQuestions is int && data.totalQuestions >= 1 && data.totalQuestions <= 50 &&
+               data.correctAnswers is int && data.correctAnswers >= 0 && data.correctAnswers <= data.totalQuestions &&
+               data.scorePercent is int && data.scorePercent >= 0 && data.scorePercent <= 100 &&
+               data.questionsPayload is string && data.questionsPayload.size() <= 80000 &&
+               data.completed is bool &&
+               data.xpAwarded is bool &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /quizzes/{quizId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(quizId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(quizId) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['userId', 'topic', 'difficulty', 'totalQuestions', 'correctAnswers', 'scorePercent', 'questionsPayload', 'completed', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'topic', 'difficulty', 'totalQuestions', 'correctAnswers', 'scorePercent', 'questionsPayload', 'completed', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         isValidStudyQuiz(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(quizId) &&
+                         isValidStudyQuiz(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['correctAnswers', 'scorePercent', 'questionsPayload', 'completed', 'xpAwarded', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(quizId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      // 6. FocusSessionRecord Subcollection
+      function isValidFocusSession(data) {
+        return data.userId is string && data.userId == userId &&
+               data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 100 &&
+               data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 200 &&
+               data.syllabusSummary is string && data.syllabusSummary.size() <= 20000 &&
+               data.revisionNotes is string && data.revisionNotes.size() <= 20000 &&
+               data.practiceQuestions is string && data.practiceQuestions.size() <= 20000 &&
+               data.durationMinutes is int && data.durationMinutes >= 1 && data.durationMinutes <= 300 &&
+               data.completed is bool &&
+               data.xpAwarded is bool &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /focus_sessions/{sessionId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(sessionId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(sessionId) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['userId', 'subject', 'topic', 'syllabusSummary', 'revisionNotes', 'practiceQuestions', 'durationMinutes', 'completed', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'subject', 'topic', 'syllabusSummary', 'revisionNotes', 'practiceQuestions', 'durationMinutes', 'completed', 'xpAwarded', 'createdAt', 'updatedAt']) &&
+                         isValidFocusSession(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(sessionId) &&
+                         isValidFocusSession(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['subject', 'topic', 'syllabusSummary', 'revisionNotes', 'practiceQuestions', 'durationMinutes', 'completed', 'xpAwarded', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(sessionId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      // 7. HomeworkSession Subcollection
+      function isValidHomeworkSession(data) {
+        return data.userId is string && data.userId == userId &&
+               data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 100 &&
+               data.extractedQuestion is string && data.extractedQuestion.size() >= 1 && data.extractedQuestion.size() <= 10000 &&
+               data.stepByStepSolution is string && data.stepByStepSolution.size() <= 30000 &&
+               data.conceptExplanation is string && data.conceptExplanation.size() <= 20000 &&
+               data.followUpNotes is string && data.followUpNotes.size() <= 20000 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /homework_sessions/{hwId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(hwId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(hwId) &&
+                         request.auth.uid == userId &&
+                         incoming().keys().hasAll(['userId', 'subject', 'extractedQuestion', 'stepByStepSolution', 'conceptExplanation', 'followUpNotes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'subject', 'extractedQuestion', 'stepByStepSolution', 'conceptExplanation', 'followUpNotes', 'createdAt', 'updatedAt']) &&
+                         isValidHomeworkSession(incoming());
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(hwId) &&
+                         isValidHomeworkSession(incoming()) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['stepByStepSolution', 'conceptExplanation', 'followUpNotes', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(hwId) && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // 8. Manual UPI Payment Requests Collection
+    function isValidPaymentRequest(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120 &&
+             data.studentEmail is string && data.studentEmail.size() >= 3 && data.studentEmail.size() <= 160 &&
+             data.selectedPlan in ['BASIC', 'PRO'] &&
+             data.amount is int && data.amount in [99, 199, 299, 399] &&
+             data.utr is string && data.utr.size() >= 6 && data.utr.size() <= 64 &&
+             data.status in ['PENDING', 'APPROVED', 'REJECTED'] &&
+             data.processedByAdmin is string && data.processedByAdmin.size() <= 160 &&
+             data.adminNote is string && data.adminNote.size() <= 500 &&
+             data.notificationStatus is string && data.notificationStatus.size() <= 60 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /payment_requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Students can only submit PENDING requests for themselves
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'PENDING' &&
+                       incoming().processedByAdmin == '' &&
+                       incoming().keys().hasAll([
+                         'userId', 'studentName', 'studentEmail', 'selectedPlan',
+                         'amount', 'utr', 'status', 'processedByAdmin', 'adminNote',
+                         'notificationStatus', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'studentName', 'studentEmail', 'selectedPlan',
+                         'amount', 'utr', 'status', 'processedByAdmin', 'adminNote',
+                         'notificationStatus', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidPaymentRequest(incoming());
+
+      // ONLY Admins can approve or reject payment requests, and only while status is PENDING (or admin override)
+      allow update: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       isValidPaymentRequest(incoming()) &&
+                       isAdmin() &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'status', 'processedByAdmin', 'adminNote', 'notificationStatus', 'updatedAt'
+                       ]);
+
+      allow delete: if false;
+    }
+
+    // 9. Collaborative Notebooks Collection
+    function isValidSharedNotebook(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 120 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 80 &&
+             data.sourceType is string && data.sourceType.size() <= 40 &&
+             data.sourceUrl is string && data.sourceUrl.size() <= 500 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 80000 &&
+             data.isPublic is bool &&
+             data.likesCount is int && data.likesCount >= 0 &&
+             data.feedbackLog is string && data.feedbackLog.size() <= 40000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /notebooks/{notebookId} {
+      allow get: if isSignedIn() && isValidId(notebookId) && (resource.data.userId == request.auth.uid || resource.data.isPublic == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(notebookId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'authorName', 'title', 'subject', 'sourceType',
+                         'sourceUrl', 'content', 'isPublic', 'likesCount', 'feedbackLog',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'authorName', 'title', 'subject', 'sourceType',
+                         'sourceUrl', 'content', 'isPublic', 'likesCount', 'feedbackLog',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidSharedNotebook(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(notebookId) &&
+                       isValidSharedNotebook(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (request.auth.uid == existing().userId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subject', 'sourceType', 'sourceUrl', 'content', 'isPublic', 'likesCount', 'feedbackLog', 'updatedAt'])) ||
+                         (existing().isPublic == true &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'feedbackLog', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(notebookId) && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // 10. School Portals & Educator/Student Group Chats
+    function isValidSchoolPortal(data) {
+      return data.creatorId is string && data.creatorId.size() >= 1 && data.creatorId.size() <= 128 &&
+             data.creatorName is string && data.creatorName.size() >= 1 && data.creatorName.size() <= 120 &&
+             data.creatorRole in ['ADMIN', 'TEACHER', 'PRINCIPAL', 'STUDENT'] &&
+             data.schoolName is string && data.schoolName.size() >= 1 && data.schoolName.size() <= 160 &&
+             data.groupName is string && data.groupName.size() >= 1 && data.groupName.size() <= 120 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.announcement is string && data.announcement.size() <= 5000 &&
+             data.sharedFilesInfo is string && data.sharedFilesInfo.size() <= 20000 &&
+             data.chatTranscript is string && data.chatTranscript.size() <= 60000 &&
+             data.voiceRoomActive is bool &&
+             (!('portalStatus' in data) || data.portalStatus in ['ACTIVE', 'APPROVED', 'PENDING_APPROVAL', 'REJECTED', 'SUSPENDED', 'REVOKED']) &&
+             (!('academicYear' in data) || (data.academicYear is string && data.academicYear.size() <= 40)) &&
+             (!('classesInfo' in data) || (data.classesInfo is string && data.classesInfo.size() <= 500)) &&
+             (!('subjectsInfo' in data) || (data.subjectsInfo is string && data.subjectsInfo.size() <= 500)) &&
+             (!('timetableInfo' in data) || (data.timetableInfo is string && data.timetableInfo.size() <= 4000)) &&
+             (!('homeworkInfo' in data) || (data.homeworkInfo is string && data.homeworkInfo.size() <= 10000)) &&
+             (!('groupCategory' in data) || data.groupCategory in ['OFFICIAL_PORTAL', 'CLASS_GROUP', 'SUBJECT_GROUP', 'STUDENT_STUDY_GROUP', 'EXAM_PREP_GROUP']) &&
+             (!('moderationLog' in data) || (data.moderationLog is string && data.moderationLog.size() <= 10000)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /school_portals/{portalId} {
+      allow get: if isSignedIn() && isValidId(portalId);
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+                       isValidId(portalId) &&
+                       incoming().creatorId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'creatorId', 'creatorName', 'creatorRole', 'schoolName',
+                         'groupName', 'description', 'announcement', 'sharedFilesInfo',
+                         'chatTranscript', 'voiceRoomActive', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'creatorId', 'creatorName', 'creatorRole', 'schoolName',
+                         'groupName', 'description', 'announcement', 'sharedFilesInfo',
+                         'chatTranscript', 'voiceRoomActive', 'portalStatus', 'academicYear',
+                         'classesInfo', 'subjectsInfo', 'timetableInfo', 'homeworkInfo',
+                         'groupCategory', 'moderationLog', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidSchoolPortal(incoming()) && (
+                         isAdmin() ||
+                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'TEACHER', 'PRINCIPAL'] ||
+                         (incoming().creatorRole == 'STUDENT' &&
+                          'groupCategory' in incoming() &&
+                          incoming().groupCategory in ['STUDENT_STUDY_GROUP', 'EXAM_PREP_GROUP'])
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(portalId) &&
+                       isValidSchoolPortal(incoming()) &&
+                       incoming().creatorId == existing().creatorId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         request.auth.uid == existing().creatorId ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['chatTranscript', 'sharedFilesInfo', 'voiceRoomActive', 'updatedAt']) ||
+                         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'TEACHER', 'PRINCIPAL'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'announcement', 'chatTranscript', 'sharedFilesInfo', 'voiceRoomActive',
+                            'timetableInfo', 'homeworkInfo', 'classesInfo', 'subjectsInfo',
+                            'moderationLog', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(portalId) && (request.auth.uid == resource.data.creatorId || isAdmin());
+    }
+
+    match /system_config/{configId} {
+      allow get: if isSignedIn() && isValidId(configId);
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

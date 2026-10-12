@@ -1,0 +1,6 @@
+{
+  "name": "Ultron",
+  "description": "Study smarter. Go further. A complete academic study, focus, flashcards, quiz, homework, and collaboration platform for students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
