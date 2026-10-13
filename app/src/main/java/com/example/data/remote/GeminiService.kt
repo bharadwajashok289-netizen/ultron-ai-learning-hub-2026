@@ -169,7 +169,7 @@ object GeminiService {
     private const val BASE_URL = "https://generativelanguage.googleapis.com/"
 
     // Valid Gemini & Veo Model Constants
-    const val MODEL_GENERAL_CHAT = "gemini-3-flash-preview"
+    const val MODEL_GENERAL_CHAT = "gemini-3.5-flash"
     const val MODEL_FALLBACK_FLASH = "gemini-2.5-flash"
     const val MODEL_PRO_REASONING = "gemini-3.1-pro-preview"
     const val MODEL_FAST_LITE = "gemini-3.1-flash-lite-preview"
@@ -179,7 +179,7 @@ object GeminiService {
     const val MODEL_VEO_HIGH_QUALITY = "veo-3.1-generate-preview"
     const val MODEL_VEO_FAST = "veo-3.1-fast-generate-preview"
     const val MODEL_TTS = "gemini-2.5-flash-preview-tts"
-    const val MODEL_TRANSCRIBE = "gemini-3-flash-preview"
+    const val MODEL_TRANSCRIBE = "gemini-3.5-flash"
     const val MODEL_LIVE_VOICE = "gemini-2.5-flash"
     const val MODEL_LYRIA_CLIP = "lyria-3-clip-preview"
     const val MODEL_LYRIA_PRO = "lyria-3-pro-preview"
@@ -220,8 +220,20 @@ object GeminiService {
     }
 
     fun bitmapToBase64(bitmap: Bitmap, quality: Int = 82): String {
+        val maxDim = 1280
+        val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
+            val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+            val (targetW, targetH) = if (ratio > 1f) {
+                maxDim to (maxDim / ratio).toInt().coerceAtLeast(1)
+            } else {
+                (maxDim * ratio).toInt().coerceAtLeast(1) to maxDim
+            }
+            Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+        } else {
+            bitmap
+        }
         val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
         return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
@@ -456,17 +468,38 @@ object GeminiService {
                     } else null
                 )
 
-                val resp = try {
-                    api.generateContent(preferredModel, key, req)
-                } catch (_: Exception) {
-                    api.generateContent(
-                        MODEL_FALLBACK_FLASH,
-                        key,
-                        req.copy(generationConfig = GenerationConfig(responseMimeType = if (jsonMimeType) "application/json" else null))
-                    )
+                val modelsToTry = linkedSetOf(
+                    preferredModel,
+                    MODEL_GENERAL_CHAT,
+                    "gemini-flash-latest",
+                    MODEL_FALLBACK_FLASH,
+                    MODEL_FAST_LITE
+                ).toList()
+
+                var retrievedText: String? = null
+                for (modelName in modelsToTry) {
+                    if (!retrievedText.isNullOrBlank()) break
+                    try {
+                        val currentGenConfig = genConfig.copy(
+                            responseMimeType = if (jsonMimeType) "application/json" else null,
+                            thinkingConfig = if (useHighThinking && modelName == MODEL_PRO_REASONING) {
+                                ThinkingConfig(thinkingLevel = "HIGH")
+                            } else null
+                        )
+                        val resp = api.generateContent(
+                            model = modelName,
+                            apiKey = key,
+                            request = req.copy(generationConfig = currentGenConfig)
+                        )
+                        val text = resp.candidates?.firstOrNull()?.content?.parts?.mapNotNull { it.text }?.joinToString("\n")
+                        if (!text.isNullOrBlank()) {
+                            retrievedText = text
+                        }
+                    } catch (_: Exception) {
+                        // Rate limit / 429 quota / 503 error on this model: smoothly proceed to next model in chain
+                    }
                 }
-                val text = resp.candidates?.firstOrNull()?.content?.parts?.mapNotNull { it.text }?.joinToString("\n")
-                if (!text.isNullOrBlank()) return text
+                if (!retrievedText.isNullOrBlank()) return retrievedText
             } catch (_: Exception) {
                 // Fall through to Firebase AI Logic
             }
@@ -692,14 +725,18 @@ object GeminiService {
                 preferredModel = if (images.isNotEmpty()) MODEL_PRO_REASONING else MODEL_GENERAL_CHAT,
                 jsonMimeType = true
             )
-            val startIdx = rawJson.indexOf('[')
-            val endIdx = rawJson.lastIndexOf(']')
-            val cleaned = if (startIdx >= 0 && endIdx > startIdx) {
-                rawJson.substring(startIdx, endIdx + 1)
-            } else {
-                synthesizeStructuredAcademicResponse(prompt, jsonMimeType = true)
+            val arr = try {
+                val startIdx = rawJson.indexOf('[')
+                val endIdx = rawJson.lastIndexOf(']')
+                val cleaned = if (startIdx >= 0 && endIdx > startIdx) {
+                    rawJson.substring(startIdx, endIdx + 1)
+                } else {
+                    synthesizeStructuredAcademicResponse(prompt, jsonMimeType = true)
+                }
+                Json.parseToJsonElement(cleaned).jsonArray
+            } catch (_: Exception) {
+                Json.parseToJsonElement(synthesizeStructuredAcademicResponse(prompt, jsonMimeType = true)).jsonArray
             }
-            val arr = Json.parseToJsonElement(cleaned).jsonArray
             arr.mapIndexed { idx, el ->
                 val obj = el.jsonObject
                 FlashcardItem(
@@ -735,14 +772,18 @@ object GeminiService {
                 preferredModel = if (images.isNotEmpty()) MODEL_PRO_REASONING else MODEL_GENERAL_CHAT,
                 jsonMimeType = true
             )
-            val startIdx = rawJson.indexOf('[')
-            val endIdx = rawJson.lastIndexOf(']')
-            val cleaned = if (startIdx >= 0 && endIdx > startIdx) {
-                rawJson.substring(startIdx, endIdx + 1)
-            } else {
-                synthesizeStructuredAcademicResponse(prompt, jsonMimeType = true)
+            val arr: JsonArray = try {
+                val startIdx = rawJson.indexOf('[')
+                val endIdx = rawJson.lastIndexOf(']')
+                val cleaned = if (startIdx >= 0 && endIdx > startIdx) {
+                    rawJson.substring(startIdx, endIdx + 1)
+                } else {
+                    synthesizeStructuredAcademicResponse(prompt, jsonMimeType = true)
+                }
+                Json.parseToJsonElement(cleaned).jsonArray
+            } catch (_: Exception) {
+                Json.parseToJsonElement(synthesizeStructuredAcademicResponse(prompt, jsonMimeType = true)).jsonArray
             }
-            val arr: JsonArray = Json.parseToJsonElement(cleaned).jsonArray
             arr.map { el ->
                 val obj = el.jsonObject
                 val opts = obj["options"]?.jsonArray?.map { it.jsonPrimitive.content }

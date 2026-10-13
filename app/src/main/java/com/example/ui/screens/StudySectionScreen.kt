@@ -5,10 +5,14 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
 import android.util.Base64
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,6 +58,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flip
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
@@ -68,6 +73,9 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -87,6 +95,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +109,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -107,6 +117,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.ChatTurn
 import com.example.data.model.EducationalVideoScene
@@ -114,6 +125,7 @@ import com.example.data.model.FlashcardDeck
 import com.example.data.model.FlashcardItem
 import com.example.data.model.HomeworkSession
 import com.example.data.model.QuizQuestionItem
+import com.example.data.model.ReliableEducationalVideoResource
 import com.example.data.model.StudyConversation
 import com.example.data.model.StudyQuiz
 import com.example.data.model.UserProfile
@@ -397,6 +409,7 @@ private fun StudyChatTabContent(
     onClearBitmaps: () -> Unit,
     tts: TextToSpeech?
 ) {
+    val context = LocalContext.current
     var promptText by remember { mutableStateOf("") }
     var useHighThinking by remember { mutableStateOf(false) }
     var useFastLite by remember { mutableStateOf(false) }
@@ -425,6 +438,7 @@ private fun StudyChatTabContent(
             explanationText = targetTurn.text,
             bitmap = fsBitmap,
             videoScenes = targetTurn.videoScenes,
+            reliableVideoSources = targetTurn.reliableVideoSources,
             tts = tts,
             onDismiss = { fullScreenChatTurn = null },
             onSaveToLibrary = {
@@ -434,6 +448,15 @@ private fun StudyChatTabContent(
                     summaryNotes = targetTurn.text
                 )
             },
+            onDownloadToDevice = if (fsBitmap != null) {
+                {
+                    viewModel.downloadVisualBitmapToDevice(
+                        context = context,
+                        bitmap = fsBitmap,
+                        title = targetTurn.mediaPrompt.ifBlank { "Ultron_Study_Visual" }
+                    )
+                }
+            } else null,
             onRefineVisual = { refinedPrompt ->
                 if (targetTurn.videoScenes.isNotEmpty()) {
                     viewModel.sendEducationalVideoInChat(prompt = refinedPrompt, attachedImages = attachedBitmaps)
@@ -665,6 +688,7 @@ private fun StudyChatTabContent(
 
                             // Inline Generated Diagram / Study Image inside Study Chat
                             if (decodedBitmap != null) {
+                                var inlineZoom by remember { mutableFloatStateOf(1f) }
                                 Surface(
                                     shape = RoundedCornerShape(14.dp),
                                     color = MaterialTheme.colorScheme.surface,
@@ -680,29 +704,78 @@ private fun StudyChatTabContent(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "📊 Generated Study Diagram / Visual Aid: ${turn.mediaPrompt}",
+                                                text = "📊 Generated Study Visual: ${turn.mediaPrompt}",
                                                 style = MaterialTheme.typography.labelLarge,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.weight(1f)
                                             )
-                                            OutlinedButton(
-                                                onClick = { fullScreenChatTurn = turn },
-                                                modifier = Modifier.testTag("chat_visual_fullscreen_button")
-                                            ) {
-                                                Text("Full Screen & Zoom")
+                                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(
+                                                    onClick = { inlineZoom = (inlineZoom - 0.25f).coerceAtLeast(1f) },
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Icon(Icons.Default.ZoomOut, contentDescription = "Zoom Out", modifier = Modifier.size(16.dp))
+                                                }
+                                                IconButton(
+                                                    onClick = { inlineZoom = (inlineZoom + 0.25f).coerceAtMost(2.5f) },
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Icon(Icons.Default.ZoomIn, contentDescription = "Zoom In", modifier = Modifier.size(16.dp))
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { fullScreenChatTurn = turn },
+                                                    modifier = Modifier.testTag("chat_visual_fullscreen_button")
+                                                ) {
+                                                    Text("Enlarge / Full Screen")
+                                                }
                                             }
                                         }
-                                        Image(
-                                            bitmap = decodedBitmap.asImageBitmap(),
-                                            contentDescription = "Generated Study Diagram in Chat (Tap to open Full-Screen)",
+                                        Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(210.dp)
+                                                .height(235.dp)
                                                 .clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xFF060E1F))
                                                 .clickable { fullScreenChatTurn = turn },
-                                            contentScale = ContentScale.Crop
-                                        )
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Image(
+                                                bitmap = decodedBitmap.asImageBitmap(),
+                                                contentDescription = "Generated Study Diagram in Chat (Tap to Enlarge)",
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(4.dp)
+                                                    .graphicsLayer(
+                                                        scaleX = inlineZoom,
+                                                        scaleY = inlineZoom
+                                                    ),
+                                                contentScale = ContentScale.Fit
+                                            )
+                                        }
                                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    viewModel.downloadVisualBitmapToDevice(
+                                                        context = context,
+                                                        bitmap = decodedBitmap,
+                                                        title = turn.mediaPrompt.ifBlank { "Ultron_Study_Visual" }
+                                                    )
+                                                },
+                                                modifier = Modifier.testTag("chat_download_visual_button")
+                                            ) {
+                                                Text("Download PNG")
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    viewModel.saveGeneratedMediaToStudyLibrary(
+                                                        title = turn.mediaPrompt.ifBlank { "Study Diagram" },
+                                                        mediaType = "DIAGRAM",
+                                                        summaryNotes = turn.text
+                                                    )
+                                                }
+                                            ) {
+                                                Text("Save to Library")
+                                            }
                                             OutlinedButton(
                                                 onClick = {
                                                     viewModel.sendStudyDiagramInChat(
@@ -721,17 +794,6 @@ private fun StudyChatTabContent(
                                                 }
                                             ) {
                                                 Text("Edit Prompt")
-                                            }
-                                            OutlinedButton(
-                                                onClick = {
-                                                    viewModel.saveGeneratedMediaToStudyLibrary(
-                                                        title = turn.mediaPrompt.ifBlank { "Study Diagram" },
-                                                        mediaType = "DIAGRAM",
-                                                        summaryNotes = turn.text
-                                                    )
-                                                }
-                                            ) {
-                                                Text("Save to Library")
                                             }
                                         }
                                         StructuredVisualExplanationCard(
@@ -765,7 +827,9 @@ private fun StudyChatTabContent(
                                 InlineEducationalVideoPlayer(
                                     topic = turn.mediaPrompt.ifBlank { "Educational Concept Lesson" },
                                     scenes = turn.videoScenes,
-                                    tts = tts
+                                    tts = tts,
+                                    reliableSources = turn.reliableVideoSources,
+                                    onOpenFullScreen = { fullScreenChatTurn = turn }
                                 )
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedButton(
@@ -882,11 +946,34 @@ private fun StudyChatTabContent(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Quick 1-Tap Multimodal Study Chat Generators (Diagram/Image + Educational Video)
+                // Quick 1-Tap Multimodal Study Chat Generators (AI Image, Labeled Diagram, Educational Video)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    OutlinedButton(
+                        onClick = {
+                            val topicToImage = promptText.ifBlank { "Educational Textbook Illustration of Solar System & Planets" }
+                            promptText = ""
+                            viewModel.sendStudyDiagramInChat(
+                                prompt = "$topicToImage (Textbook Illustration)",
+                                attachedImages = attachedBitmaps,
+                                onSpeakResponse = if (autoReadAloud) {
+                                    { ans -> tts?.speak(ans.take(350), TextToSpeech.QUEUE_FLUSH, null, "img_tts") }
+                                } else null
+                            )
+                            onClearBitmaps()
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 34.dp)
+                            .testTag("chat_generate_image_button")
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("AI Image", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                     OutlinedButton(
                         onClick = {
                             val topicToDraw = promptText.ifBlank { "Labeled Scientific Process & Concept Diagram" }
@@ -900,15 +987,15 @@ private fun StudyChatTabContent(
                             )
                             onClearBitmaps()
                         },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 34.dp)
                             .testTag("chat_generate_diagram_button")
                     ) {
-                        Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Diagram / Image", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Diagram / Map", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     OutlinedButton(
                         onClick = {
@@ -923,15 +1010,15 @@ private fun StudyChatTabContent(
                             )
                             onClearBitmaps()
                         },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 34.dp)
                             .testTag("chat_generate_video_button")
                     ) {
-                        Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Educational Video", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Edu Video", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
 
@@ -992,14 +1079,27 @@ private fun StudyChatTabContent(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InlineEducationalVideoPlayer(
     topic: String,
     scenes: List<EducationalVideoScene>,
-    tts: TextToSpeech?
+    tts: TextToSpeech?,
+    reliableSources: List<ReliableEducationalVideoResource> = emptyList(),
+    onOpenFullScreen: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
     var activeSceneIdx by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(true) }
+    var showSubtitles by remember { mutableStateOf(true) }
+    var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
+    var activeReliableWebUrl by remember { mutableStateOf<String?>(null) }
+
+    val resolvedSources = remember(topic, reliableSources) {
+        if (reliableSources.isNotEmpty()) reliableSources
+        else GeminiService.getReliableEducationalVideoSources(topic)
+    }
+
     val safeIdx = activeSceneIdx.coerceIn(0, (scenes.size - 1).coerceAtLeast(0))
     val currentScene = scenes.getOrNull(safeIdx) ?: return
 
@@ -1008,7 +1108,7 @@ fun InlineEducationalVideoPlayer(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3600, easing = LinearEasing),
+            animation = tween(durationMillis = (3600 / playbackSpeed).toInt().coerceIn(1200, 6000), easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "edu_video_phase"
@@ -1017,7 +1117,9 @@ fun InlineEducationalVideoPlayer(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFF060E1F),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("inline_educational_video_player")
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -1030,7 +1132,7 @@ fun InlineEducationalVideoPlayer(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "🎬 Educational Video Lesson (Academic Verified)",
+                        text = "🎬 Educational Video Player • ${currentScene.visualType} (${playbackSpeed}x)",
                         style = MaterialTheme.typography.labelLarge,
                         color = Color(0xFF38BDF8)
                     )
@@ -1041,9 +1143,15 @@ fun InlineEducationalVideoPlayer(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (onOpenFullScreen != null) {
+                        IconButton(onClick = onOpenFullScreen) {
+                            Icon(Icons.Default.Fullscreen, contentDescription = "Full Screen Video", tint = Color(0xFF38BDF8))
+                        }
+                    }
                     OutlinedButton(
                         onClick = {
+                            tts?.setSpeechRate(playbackSpeed)
                             tts?.speak(currentScene.narration, TextToSpeech.QUEUE_FLUSH, null, "edu_scene_tts")
                         }
                     ) {
@@ -1065,6 +1173,7 @@ fun InlineEducationalVideoPlayer(
                                 val nextIdx = (safeIdx + 1) % scenes.size
                                 activeSceneIdx = nextIdx
                                 scenes.getOrNull(nextIdx)?.let { sc ->
+                                    tts?.setSpeechRate(playbackSpeed)
                                     tts?.speak(sc.narration, TextToSpeech.QUEUE_FLUSH, null, "edu_scene_$nextIdx")
                                 }
                             }
@@ -1075,11 +1184,11 @@ fun InlineEducationalVideoPlayer(
                 }
             }
 
-            // Animated Scientific Simulation Canvas
+            // Animated 2D & 3D Scientific / Historical / Mathematical Simulation Canvas
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(175.dp)
+                    .height(195.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF0A1633))
             ) {
@@ -1088,25 +1197,40 @@ fun InlineEducationalVideoPlayer(
                     val h = size.height
                     val cx = w / 2f
                     val cy = h / 2f
-                    val animPhase = if (isPlaying) phase else 1.2f
+                    val animPhase = if (isPlaying) phase * playbackSpeed else 1.2f
 
                     when (currentScene.visualType) {
                         "WAVE" -> {
                             val path = Path()
-                            val steps = 80
+                            val path2 = Path()
+                            val steps = 90
                             for (i in 0..steps) {
                                 val x = (i.toFloat() / steps) * w
-                                val y = cy + sin((i.toFloat() / 10f) + animPhase) * (h * 0.28f)
-                                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                                val y = cy + sin((i.toFloat() / 9f) + animPhase) * (h * 0.28f)
+                                val y2 = cy + cos((i.toFloat() / 9f) + animPhase) * (h * 0.18f)
+                                if (i == 0) {
+                                    path.moveTo(x, y)
+                                    path2.moveTo(x, y2)
+                                } else {
+                                    path.lineTo(x, y)
+                                    path2.lineTo(x, y2)
+                                }
                             }
-                            drawPath(path, color = Color(0xFF38BDF8), style = Stroke(width = 5f))
                             drawLine(Color(0xFF475569), Offset(0f, cy), Offset(w, cy), strokeWidth = 2f)
+                            drawPath(path2, color = Color(0xFFA855F7).copy(alpha = 0.65f), style = Stroke(width = 3.5f))
+                            drawPath(path, color = Color(0xFF38BDF8), style = Stroke(width = 5f))
                         }
                         "BIOLOGY" -> {
-                            drawCircle(Color(0xFF10B981).copy(alpha = 0.25f), radius = h * 0.36f, center = Offset(cx, cy))
+                            drawCircle(Color(0xFF10B981).copy(alpha = 0.22f), radius = h * 0.36f, center = Offset(cx, cy))
                             drawCircle(Color(0xFF10B981), radius = h * 0.36f, center = Offset(cx, cy), style = Stroke(width = 4f))
                             val nucOffset = Offset(cx + cos(animPhase) * 14f, cy + sin(animPhase) * 10f)
                             drawCircle(Color(0xFF38BDF8), radius = h * 0.14f, center = nucOffset)
+                            for (k in 0..4) {
+                                val ang = animPhase + k * (2f * PI.toFloat() / 5f)
+                                val ox = cx + cos(ang) * (h * 0.25f)
+                                val oy = cy + sin(ang) * (h * 0.22f)
+                                drawCircle(Color(0xFFF59E0B), radius = 8f, center = Offset(ox, oy))
+                            }
                         }
                         "GRAPH" -> {
                             drawLine(Color(0xFF64748B), Offset(w * 0.12f, h * 0.85f), Offset(w * 0.9f, h * 0.85f), strokeWidth = 3f)
@@ -1133,14 +1257,57 @@ fun InlineEducationalVideoPlayer(
                             drawLine(Color(0xFF38BDF8), Offset(right, top), Offset(right, bottom), strokeWidth = 4f)
                             drawLine(Color(0xFF38BDF8), Offset(right, bottom), Offset(left, bottom), strokeWidth = 4f)
                             drawLine(Color(0xFF38BDF8), Offset(left, bottom), Offset(left, top), strokeWidth = 4f)
-                            val progress = (animPhase / (2f * PI.toFloat())).coerceIn(0f, 1f)
+                            val progress = ((animPhase % (2f * PI.toFloat())) / (2f * PI.toFloat())).coerceIn(0f, 1f)
                             val chargeX = left + (right - left) * progress
                             drawCircle(Color(0xFF10B981), radius = 9f, center = Offset(chargeX, top))
                             val chargeBottomX = right - (right - left) * progress
                             drawCircle(Color(0xFFF59E0B), radius = 9f, center = Offset(chargeBottomX, bottom))
                         }
+                        "TIMELINE", "HISTORY_TIMELINE" -> {
+                            val yLine = cy
+                            drawLine(Color(0xFF38BDF8), Offset(w * 0.1f, yLine), Offset(w * 0.9f, yLine), strokeWidth = 5f)
+                            val milestoneCount = 4
+                            val activeDot = ((animPhase / (2f * PI.toFloat())) * milestoneCount).toInt().coerceIn(0, milestoneCount - 1)
+                            for (m in 0 until milestoneCount) {
+                                val mx = w * (0.15f + m * 0.23f)
+                                drawCircle(
+                                    color = if (m == activeDot) Color(0xFFF59E0B) else Color(0xFF10B981),
+                                    radius = if (m == activeDot) 15f else 10f,
+                                    center = Offset(mx, yLine)
+                                )
+                            }
+                        }
+                        "GEOMETRY_3D", "CHEMISTRY_3D", "CHEMISTRY_MOLECULE" -> {
+                            // 3D Rotating Isometric Projection
+                            val radius = h * 0.28f
+                            val pts = (0..3).map { idx ->
+                                val a = animPhase + idx * (PI.toFloat() / 2f)
+                                Offset(cx + cos(a) * radius, cy + sin(a) * (radius * 0.45f) - 24f)
+                            }
+                            val apex = Offset(cx, cy - radius * 0.95f)
+                            val baseCenter = Offset(cx, cy + radius * 0.65f)
+                            pts.forEachIndexed { idx, pt ->
+                                val nextPt = pts[(idx + 1) % pts.size]
+                                drawLine(Color(0xFF38BDF8), pt, nextPt, strokeWidth = 3.5f)
+                                drawLine(Color(0xFF10B981), apex, pt, strokeWidth = 3f)
+                                drawLine(Color(0xFFA855F7).copy(alpha = 0.7f), baseCenter, pt, strokeWidth = 2.5f)
+                                drawCircle(Color(0xFFF59E0B), radius = 8f, center = pt)
+                            }
+                            drawCircle(Color(0xFF38BDF8), radius = 11f, center = apex)
+                        }
+                        "MAP_GEO", "GEOGRAPHY_EARTH" -> {
+                            // Latitude / Longitude Globe & Tectonic / Climate Flow
+                            val rGlobe = h * 0.36f
+                            drawCircle(Color(0xFF0284C7).copy(alpha = 0.25f), radius = rGlobe, center = Offset(cx, cy))
+                            drawCircle(Color(0xFF38BDF8), radius = rGlobe, center = Offset(cx, cy), style = Stroke(width = 4f))
+                            drawLine(Color(0xFFF59E0B), Offset(cx - rGlobe, cy), Offset(cx + rGlobe, cy), strokeWidth = 3f)
+                            drawLine(Color(0xFF10B981), Offset(cx, cy - rGlobe), Offset(cx, cy + rGlobe), strokeWidth = 2.5f)
+                            val satX = cx + cos(animPhase) * (rGlobe * 0.75f)
+                            val satY = cy + sin(animPhase * 0.6f) * (rGlobe * 0.45f)
+                            drawCircle(Color(0xFFF43F5E), radius = 9f, center = Offset(satX, satY))
+                        }
                         else -> {
-                            // ORBIT / CIRCUIT / PHYSICS DYNAMICS
+                            // ORBIT / 3D DYNAMICS
                             val r1 = h * 0.22f
                             val r2 = h * 0.36f
                             drawCircle(Color(0xFF38BDF8), radius = 18f, center = Offset(cx, cy))
@@ -1157,7 +1324,7 @@ fun InlineEducationalVideoPlayer(
                     color = Color(0xCC030712),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .align(Alignment.TopStart)
                         .padding(8.dp)
                 ) {
                     Text(
@@ -1165,6 +1332,48 @@ fun InlineEducationalVideoPlayer(
                         style = MaterialTheme.typography.labelLarge,
                         color = Color(0xFF10B981),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                if (showSubtitles) {
+                    Surface(
+                        color = Color(0xD9020617),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "CC: ${currentScene.subtitleText.ifBlank { currentScene.narration }}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // Playback Speed & Subtitles Control Bar
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                FilterChip(
+                    selected = showSubtitles,
+                    onClick = { showSubtitles = !showSubtitles },
+                    label = { Text(if (showSubtitles) "Subtitles: ON" else "Subtitles: OFF") }
+                )
+                listOf(0.75f, 1.0f, 1.25f, 1.5f).forEach { spd ->
+                    FilterChip(
+                        selected = playbackSpeed == spd,
+                        onClick = {
+                            playbackSpeed = spd
+                            tts?.setSpeechRate(spd)
+                        },
+                        label = { Text("${spd}x") }
                     )
                 }
             }
@@ -1175,7 +1384,7 @@ fun InlineEducationalVideoPlayer(
                 color = Color(0xFFE2E8F0)
             )
 
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -1184,10 +1393,99 @@ fun InlineEducationalVideoPlayer(
                         selected = safeIdx == idx,
                         onClick = {
                             activeSceneIdx = idx
+                            tts?.setSpeechRate(playbackSpeed)
                             tts?.speak(sc.narration, TextToSpeech.QUEUE_FLUSH, null, "edu_scene_$idx")
                         },
                         label = { Text("Scene ${sc.sceneNumber}") }
                     )
+                }
+            }
+
+            // Verified Educational Video & Interactive Simulation Sources (Reliable Fallback & Enrichment)
+            if (resolvedSources.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF0E1B38),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "🌐 Verified Educational Video & Interactive Sources (PhET / Khan Academy / NASA):",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color(0xFF38BDF8)
+                        )
+                        resolvedSources.forEach { src ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${src.title} (${src.provider})",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = src.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF94A3B8),
+                                        maxLines = 2
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            activeReliableWebUrl = if (activeReliableWebUrl == src.url) null else src.url
+                                        }
+                                    ) {
+                                        Text(if (activeReliableWebUrl == src.url) "Hide Player" else "Open In-App")
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            runCatching {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(src.url)))
+                                            }
+                                        }
+                                    ) {
+                                        Text("Browser")
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!activeReliableWebUrl.isNullOrBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color.Black,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(220.dp)
+                            ) {
+                                AndroidView(
+                                    modifier = Modifier.fillMaxSize(),
+                                    factory = { ctx ->
+                                        WebView(ctx).apply {
+                                            settings.javaScriptEnabled = true
+                                            settings.domStorageEnabled = true
+                                            webChromeClient = WebChromeClient()
+                                            webViewClient = WebViewClient()
+                                            loadUrl(activeReliableWebUrl!!)
+                                        }
+                                    },
+                                    update = { webView ->
+                                        if (webView.url != activeReliableWebUrl && !activeReliableWebUrl.isNullOrBlank()) {
+                                            webView.loadUrl(activeReliableWebUrl!!)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1847,6 +2145,9 @@ private fun ScienceAndMediaStudioTabContent(
         "3D Visualization",
         "Flowchart",
         "Mind Map",
+        "Concept Map",
+        "Geography Map",
+        "Scientific Chart",
         "Circuit Diagram",
         "Biological Anatomy",
         "Chemistry Structure",
@@ -1862,6 +2163,7 @@ private fun ScienceAndMediaStudioTabContent(
             explanationText = generatedMediaInfo ?: "Educational Visual Explanation",
             bitmap = generatedBitmap,
             videoScenes = generatedVideoScenes,
+            reliableVideoSources = GeminiService.getReliableEducationalVideoSources(mediaPrompt.ifBlank { selectedDiagramLayout }),
             tts = tts,
             onDismiss = { showFullScreenStudioAsset = false },
             onSaveToLibrary = {
@@ -1871,6 +2173,15 @@ private fun ScienceAndMediaStudioTabContent(
                     summaryNotes = generatedMediaInfo ?: "Visual study aid"
                 )
             },
+            onDownloadToDevice = if (generatedBitmap != null) {
+                {
+                    viewModel.downloadVisualBitmapToDevice(
+                        context = context,
+                        bitmap = generatedBitmap,
+                        title = mediaPrompt.ifBlank { selectedDiagramLayout }
+                    )
+                }
+            } else null,
             onRefineVisual = { refinedPrompt ->
                 mediaPrompt = refinedPrompt
                 viewModel.generateDiagramOrStudyImage(
@@ -2089,22 +2400,32 @@ private fun ScienceAndMediaStudioTabContent(
                         }
                     }
                     if (generatedBitmap != null) {
-                        Image(
-                            bitmap = generatedBitmap.asImageBitmap(),
-                            contentDescription = "Generated Study Diagram (Tap for Full Screen)",
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(220.dp)
+                                .height(240.dp)
                                 .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF060E1F))
                                 .clickable { showFullScreenStudioAsset = true },
-                            contentScale = ContentScale.Crop
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = generatedBitmap.asImageBitmap(),
+                                contentDescription = "Generated Study Diagram (Tap for Full Screen)",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
                     if (generatedVideoScenes.isNotEmpty()) {
                         InlineEducationalVideoPlayer(
                             topic = mediaPrompt.ifBlank { "Educational Video Lesson" },
                             scenes = generatedVideoScenes,
-                            tts = tts
+                            tts = tts,
+                            reliableSources = GeminiService.getReliableEducationalVideoSources(mediaPrompt.ifBlank { "Educational Video Lesson" }),
+                            onOpenFullScreen = { showFullScreenStudioAsset = true }
                         )
                     }
                     if (!generatedMediaInfo.isNullOrBlank()) {
@@ -2137,6 +2458,20 @@ private fun ScienceAndMediaStudioTabContent(
                         )
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (generatedBitmap != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.downloadVisualBitmapToDevice(
+                                        context = context,
+                                        bitmap = generatedBitmap,
+                                        title = mediaPrompt.ifBlank { selectedDiagramLayout }
+                                    )
+                                },
+                                modifier = Modifier.testTag("studio_download_visual_button")
+                            ) {
+                                Text("Download PNG")
+                            }
+                        }
                         OutlinedButton(
                             onClick = {
                                 viewModel.generateDiagramOrStudyImage(

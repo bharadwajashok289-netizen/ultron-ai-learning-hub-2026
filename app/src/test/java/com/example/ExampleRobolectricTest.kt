@@ -288,4 +288,82 @@ class ExampleRobolectricTest {
         authManager.clearSession()
         assertEquals(SpotifyAuthState.Unauthenticated, authManager.authState.value)
     }
+
+    @Test
+    fun `verify smart AI image diagram and educational video generation and download`(): Unit = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        // 1. Verify Smart AI Service Selection
+        val (videoService, videoStyle) = GeminiService.selectBestGenerationService("Create an educational video animation on photosynthesis")
+        assertEquals("VIDEO", videoService)
+        assertTrue(videoStyle.isNotBlank())
+
+        val (geoService, geoStyle) = GeminiService.selectBestGenerationService("Draw a diagram of tectonic plates and latitude lines")
+        assertEquals("DIAGRAM", geoService)
+        assertEquals("Geography Map", geoStyle)
+
+        val (timelineService, timelineStyle) = GeminiService.selectBestGenerationService("Show a diagram of the historical timeline of the Industrial Revolution")
+        assertEquals("DIAGRAM", timelineService)
+        assertEquals("Historical Scene & Timeline", timelineStyle)
+
+        val (flowchartService, flowchartStyle) = GeminiService.selectBestGenerationService("Generate a flowchart of cellular respiration steps")
+        assertEquals("DIAGRAM", flowchartService)
+        assertEquals("Flowchart", flowchartStyle)
+
+        val (imageService, imageStyle) = GeminiService.selectBestGenerationService("Generate an image of ancient Rome architecture")
+        assertEquals("IMAGE", imageService)
+        assertEquals("Textbook Illustration", imageStyle)
+
+        // 2. Verify High-Clarity Diagram & Image Rendering across all educational categories
+        val stylesToTest = listOf(
+            "Scientific Diagram" to "Newton's Second Law F = m * a",
+            "Geography Map" to "World Latitude & Tectonic Boundaries Map",
+            "Historical Timeline" to "Timeline of the French Revolution",
+            "Math Graph" to "Quadratic Function Parabola & Geometry",
+            "Flowchart" to "Algorithm Flowchart for Binary Search",
+            "Mind Map" to "Concept Map of Thermodynamics",
+            "Biological Anatomy" to "Eukaryotic Cell & Mitochondria Anatomy",
+            "Chemistry Structure" to "Benzene Ring & Covalent Bonding",
+            "Circuit Diagram" to "Ohm's Law Series & Parallel Circuit",
+            "Scientific Chart" to "Comparative Bar Chart of Renewable Energy",
+            "Textbook Illustration" to "Historical Scene of Ancient Nalanda University"
+        )
+
+        stylesToTest.forEach { (style, prompt) ->
+            val bmp = GeminiService.renderScientificDiagramBitmap(
+                topic = prompt,
+                explanationText = "Step-by-step academic explanation of $prompt",
+                styleOrLayout = style
+            )
+            assertNotNull("Bitmap for $style should not be null", bmp)
+            assertTrue("Bitmap width for $style should be > 400", bmp.width > 400)
+            assertTrue("Bitmap height for $style should be > 300", bmp.height > 300)
+        }
+
+        // 3. Verify Device PNG Download Helper
+        val sampleBmp = GeminiService.renderScientificDiagramBitmap(
+            topic = "Krebs Cycle Labeled Diagram",
+            explanationText = "Citric acid cycle ATP and NADH production",
+            styleOrLayout = "Biological Anatomy"
+        )
+        val saveResult = GeminiService.saveBitmapToDeviceDownloads(context, sampleBmp, "Krebs Cycle Labeled Diagram")
+        assertTrue(saveResult.isSuccess)
+        assertTrue(saveResult.getOrNull().orEmpty().contains(".png"))
+
+        // 4. Verify Educational Video Generation & Reliable Educational Video Sources
+        val videoRes = GeminiService.generateEducationalVideoForStudyChat(
+            prompt = "3D Geometry & Calculus Derivatives",
+            language = "English",
+            studentClass = "Class 12",
+            conversationContext = "Student asked how derivatives relate to tangent slopes."
+        )
+        assertTrue(videoRes.isSuccess)
+        val (explanation, scenes) = videoRes.getOrThrow()
+        assertEquals(4, scenes.size)
+        assertTrue(scenes.all { it.title.isNotBlank() && it.narration.isNotBlank() && it.subtitleText.isNotBlank() })
+        assertTrue(explanation.contains("SHORT EXPLANATION:") || explanation.contains("Educational Video Lesson"))
+        val reliableSources = GeminiService.getReliableEducationalVideoSources("3D Geometry & Calculus Derivatives", "Class 12")
+        assertTrue(reliableSources.isNotEmpty())
+        assertTrue(reliableSources.all { it.url.startsWith("https://") && it.provider.isNotBlank() })
+    }
 }

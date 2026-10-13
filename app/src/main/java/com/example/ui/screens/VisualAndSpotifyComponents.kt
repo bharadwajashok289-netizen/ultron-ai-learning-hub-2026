@@ -90,6 +90,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.EducationalVideoScene
+import com.example.data.model.ReliableEducationalVideoResource
 import com.example.data.remote.SpotifyMusicService
 import com.example.data.remote.SpotifyStudyTrack
 import java.util.Locale
@@ -351,9 +352,11 @@ fun FullScreenVisualViewerDialog(
     explanationText: String,
     bitmap: Bitmap? = null,
     videoScenes: List<EducationalVideoScene> = emptyList(),
+    reliableVideoSources: List<ReliableEducationalVideoResource> = emptyList(),
     tts: TextToSpeech? = null,
     onDismiss: () -> Unit,
     onSaveToLibrary: () -> Unit,
+    onDownloadToDevice: (() -> Unit)? = null,
     onRefineVisual: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -543,7 +546,8 @@ fun FullScreenVisualViewerDialog(
                                 InlineEducationalVideoPlayer(
                                     topic = parsed.title,
                                     scenes = videoScenes,
-                                    tts = if (isMuted) null else tts
+                                    tts = if (isMuted) null else tts,
+                                    reliableSources = reliableVideoSources
                                 )
                             }
 
@@ -566,7 +570,7 @@ fun FullScreenVisualViewerDialog(
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Text(
-                                                text = "CC: ${currentScene.narration}",
+                                                text = "CC: ${currentScene.subtitleText.ifBlank { currentScene.narration }}",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = Color(0xFFE2E8F0),
                                                 modifier = Modifier.padding(8.dp)
@@ -691,9 +695,18 @@ fun FullScreenVisualViewerDialog(
                                     text = "📖 Complete Visual Explanation & Labels",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color(0xFF38BDF8),
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (onDownloadToDevice != null && bitmap != null) {
+                                        OutlinedButton(
+                                            onClick = onDownloadToDevice,
+                                            modifier = Modifier.testTag("fullscreen_download_png_button")
+                                        ) {
+                                            Text("Download PNG", color = Color(0xFF38BDF8))
+                                        }
+                                    }
                                     OutlinedButton(onClick = onSaveToLibrary) {
                                         Text("Save to Library", color = Color.White)
                                     }

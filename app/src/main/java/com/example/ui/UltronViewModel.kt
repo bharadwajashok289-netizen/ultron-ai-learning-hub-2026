@@ -472,16 +472,6 @@ class UltronViewModel(
         }
 
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser) {
-            if (profile.chatsUsed >= profile.maxMonthlyChats) {
-                _errorBanner.value = "Monthly study chat limit (${profile.maxMonthlyChats}) reached for your ${profile.plan} plan. Upgrade in Subscription to continue."
-                return
-            }
-            if (attachedImages.isNotEmpty() && (profile.imagesUsed + attachedImages.size) > profile.maxMonthlyImages) {
-                _errorBanner.value = "Monthly image upload limit (${profile.maxMonthlyImages}) reached for your ${profile.plan} plan."
-                return
-            }
-        }
 
         val userTurn = ChatTurn(role = "user", text = cleanPrompt.ifBlank { "[Attached ${attachedImages.size} Study Image(s)]" })
         val historyBefore = _activeChatTurns.value
@@ -531,10 +521,6 @@ class UltronViewModel(
             return
         }
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser && profile.chatsUsed >= profile.maxMonthlyChats) {
-            _errorBanner.value = "Monthly study chat limit (${profile.maxMonthlyChats}) reached for your ${profile.plan} plan."
-            return
-        }
 
         _suggestedVisualTopic.value = null
         val jobId = "job_diag_${System.currentTimeMillis() % 100000}"
@@ -656,10 +642,6 @@ class UltronViewModel(
         }
 
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser && profile.chatsUsed >= profile.maxMonthlyChats) {
-            _errorBanner.value = "Monthly study chat limit (${profile.maxMonthlyChats}) reached for your ${profile.plan} plan."
-            return
-        }
 
         _suggestedVisualTopic.value = null
         val jobId = "job_vid_${System.currentTimeMillis() % 100000}"
@@ -880,12 +862,6 @@ class UltronViewModel(
             return
         }
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser && images.isNotEmpty()) {
-            if (profile.imagesUsed + images.size > profile.maxMonthlyImages) {
-                _errorBanner.value = "Monthly image upload limit (${profile.maxMonthlyImages}) reached for your ${profile.plan} plan."
-                return
-            }
-        }
 
         viewModelScope.launch {
             _isBusy.value = true
@@ -985,12 +961,6 @@ class UltronViewModel(
             return
         }
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser && images.isNotEmpty()) {
-            if (profile.imagesUsed + images.size > profile.maxMonthlyImages) {
-                _errorBanner.value = "Monthly image upload limit reached for your ${profile.plan} plan."
-                return
-            }
-        }
 
         viewModelScope.launch {
             _isBusy.value = true
@@ -1065,12 +1035,6 @@ class UltronViewModel(
             return
         }
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser && images.isNotEmpty()) {
-            if (profile.imagesUsed + images.size > profile.maxMonthlyImages) {
-                _errorBanner.value = "Monthly image upload limit (${profile.maxMonthlyImages}) reached for your ${profile.plan} plan."
-                return
-            }
-        }
 
         viewModelScope.launch {
             _isBusy.value = true
@@ -1140,12 +1104,6 @@ class UltronViewModel(
             return
         }
         val profile = userProfile.value
-        if (profile != null && !profile.isAdminUser && syllabusImages.isNotEmpty()) {
-            if (profile.imagesUsed + syllabusImages.size > profile.maxMonthlyImages) {
-                _errorBanner.value = "Monthly image upload limit reached for your ${profile.plan} plan."
-                return
-            }
-        }
 
         viewModelScope.launch {
             _isBusy.value = true
@@ -1290,10 +1248,6 @@ class UltronViewModel(
         referenceBitmap: Bitmap? = null,
         styleOrLayout: String = "Scientific Diagram"
     ) {
-        if (!isOnline.value) {
-            _errorBanner.value = "Offline: Image & diagram generation requires an internet connection."
-            return
-        }
         val cleanPrompt = prompt.trim().ifBlank { "Labeled diagram of a eukaryotic cell structure" }
         if (!GeminiService.isSafeAcademicPrompt(cleanPrompt)) {
             _errorBanner.value = "Academic Safety Policy: Abusive or inappropriate prompts are blocked."
@@ -1387,10 +1341,6 @@ class UltronViewModel(
         }
         if (!GeminiService.isEducationalVideoTopic(cleanPrompt)) {
             _errorBanner.value = "Educational Purpose Policy: Videos in Ultron must be related to academic & educational subjects."
-            return
-        }
-        if (!isOnline.value) {
-            _errorBanner.value = "Offline: Veo 3.1 video generation requires an internet connection."
             return
         }
         val jobId = "job_veo_${System.currentTimeMillis() % 100000}"

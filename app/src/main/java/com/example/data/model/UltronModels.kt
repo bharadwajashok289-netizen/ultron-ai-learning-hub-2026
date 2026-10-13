@@ -67,27 +67,27 @@ data class UserProfile(
         get() = role == "ADMIN" || UltronAdmins.isOfficialAdmin(email)
 
     val effectivePlan: String
-        get() = if (isAdminUser) "PRO" else plan
+        get() = if (isAdminUser || plan == "PRO" || plan == "UNIVERSE PRO") "PRO" else plan.ifBlank { "FREE" }
 
     val maxMonthlyChats: Int
-        get() = when (effectivePlan) {
-            "PRO" -> Int.MAX_VALUE
-            "BASIC" -> 200
-            else -> 50
-        }
+        get() = if (effectivePlan == "PRO" || isAdminUser) Int.MAX_VALUE else 50
 
     val maxMonthlyImages: Int
-        get() = when (effectivePlan) {
-            "PRO" -> Int.MAX_VALUE
-            "BASIC" -> 50
-            else -> 10
-        }
+        get() = if (effectivePlan == "PRO" || isAdminUser) Int.MAX_VALUE else 20
 
     val chatsRemainingDisplay: String
-        get() = if (effectivePlan == "PRO") "Unlimited" else "${(maxMonthlyChats - chatsUsed).coerceAtLeast(0)}"
+        get() = if (effectivePlan == "PRO" || isAdminUser) "Unlimited" else (maxMonthlyChats - chatsUsed).coerceAtLeast(0).toString()
 
     val imagesRemainingDisplay: String
-        get() = if (effectivePlan == "PRO") "Unlimited" else "${(maxMonthlyImages - imagesUsed).coerceAtLeast(0)}"
+        get() = if (effectivePlan == "PRO" || isAdminUser) "Unlimited" else (maxMonthlyImages - imagesUsed).coerceAtLeast(0).toString()
+
+    val cosmicRank: String
+        get() = when {
+            xp >= 1000 -> "Cosmic Grandmaster 🌌"
+            xp >= 500 -> "Galactic Scholar 🌟"
+            xp >= 200 -> "Planetary Master 🪐"
+            else -> "Stellar Novice ✨"
+        }
 
     val xpForNextLevel: Int
         get() = level * 100
